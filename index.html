@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>ДВС — интерактивный макет</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 20px;
+    background: radial-gradient(circle at 50% 0%, #1e2a3a, #0b1018 70%);
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #d8e2ee;
+    user-select: none; padding: 20px;
+  }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: 2px; margin: 0;
+       color: #6fb1ff; text-shadow: 0 0 12px #1d5fa855; text-transform: uppercase; }
+
+  .dashboard {
+    display: flex; gap: 30px; align-items: center;
+    background: #10161f; border: 1px solid #223044; border-radius: 16px;
+    padding: 18px 30px; box-shadow: 0 10px 30px #0008, inset 0 0 40px #0a0f1655;
+  }
+  .gauge { position: relative; width: 150px; height: 150px; }
+  .gauge svg { width: 100%; height: 100%; transform: rotate(135deg); }
+  .gauge .val {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; pointer-events: none;
+  }
+  .gauge .val b { font-size: 26px; font-variant-numeric: tabular-nums; color: #eaf2ff; }
+  .gauge .val span { font-size: 10px; letter-spacing: 2px; color: #7b8ea6; }
+  .redline { color: #ff5a5a !important; text-shadow: 0 0 12px #ff5a5a; }
+
+  .gearbox { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .gearbox .label { font-size: 10px; letter-spacing: 3px; color: #7b8ea6; }
+  .gears { display: grid; grid-template-columns: repeat(3, 44px); gap: 6px; }
+  .gears button {
+    width: 44px; height: 44px; border-radius: 10px; cursor: pointer;
+    background: #182231; color: #93a7bd; border: 1px solid #2a3a50;
+    font-size: 15px; font-weight: 700; transition: .12s;
+  }
+  .gears button:hover { background: #20303f; }
+  .gears button.on {
+    background: #1d4ed8; color: #fff; border-color: #60a5fa;
+    box-shadow: 0 0 18px #2563eb99;
+  }
+  .gears button.rev.on { background: #b91c1c; border-color: #f87171; box-shadow: 0 0 18px #dc262699; }
+
+  .pedals { display: flex; gap: 24px; }
+  .pedal {
+    width: 90px; height: 150px; border-radius: 14px; position: relative;
+    background: linear-gradient(#1b2431, #121a24); border: 1px solid #2a3a50;
+    cursor: pointer; overflow: hidden; transition: transform .08s;
+  }
+  .pedal:active { transform: scale(.97); }
+  .pedal .fill {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 0%;
+    transition: height .05s linear;
+  }
+  .pedal.gas .fill { background: linear-gradient(#22c55e, #16a34a); }
+  .pedal.brake .fill { background: linear-gradient(#ef4444, #b91c1c); }
+  .pedal span {
+    position: absolute; bottom: 12px; width: 100%; text-align: center;
+    font-size: 11px; letter-spacing: 2px; font-weight: 700; color: #cfdcec;
+    text-shadow: 0 2px 6px #000;
+  }
+  .pedal .ridges { position: absolute; inset: 12px; display: flex;
+    flex-direction: column; justify-content: space-between; }
+  .pedal .ridges i { height: 3px; border-radius: 2px; background: #ffffff12; }
+
+  .engine-view {
+    width: 560px; height: 160px; background: #0d131b;
+    border: 1px solid #223044; border-radius: 14px; position: relative;
+    overflow: hidden; box-shadow: inset 0 0 60px #000a;
+  }
+  .crank { position: absolute; bottom: 30px; left: 0; width: 100%; height: 2px; background: #1f2c3d; }
+  .cyl {
+    position: absolute; bottom: 32px; width: 74px; height: 110px;
+    border: 2px solid #2c3d54; border-bottom: none;
+    border-radius: 8px 8px 0 0; background: #0f1620; overflow: hidden;
+  }
+  .piston {
+    position: absolute; left: 4px; right: 4px; height: 34px; bottom: 0;
+    background: linear-gradient(#94a3b8, #475569); border-radius: 4px;
+    box-shadow: 0 0 10px #0008;
+  }
+  .rod {
+    position: absolute; width: 6px; background: #64748b; left: 50%;
+    margin-left: -3px; bottom: -30px; height: 40px; transform-origin: top center;
+    border-radius: 3px;
+  }
+  .spark { position: absolute; top: 6px; left: 50%; width: 12px; height: 12px;
+    margin-left: -6px; border-radius: 50%; background: #fde047; opacity: 0;
+    box-shadow: 0 0 18px #fde047, 0 0 40px #facc15; }
+  .exhaust { position: absolute; top: 40px; right: 20px; width: 8px; height: 8px;
+    border-radius: 50%; background: #475569; opacity: .15; }
+
+  .hint { font-size: 12px; color: #5b6c82; text-align: center; line-height: 1.7; }
+  kbd { background: #182231; border: 1px solid #2a3a50; border-bottom-width: 2px;
+        border-radius: 5px; padding: 1px 6px; font-size: 11px; color: #9fb4cc; }
+</style>
+</head>
+<body>
+
+<h1>Двигатель внутреннего сгорания</h1>
+
+<div class="dashboard">
+  <div class="gauge">
+    <svg viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#1b2533" stroke-width="8"/>
+      <circle id="rpmArc" cx="50" cy="50" r="42" fill="none" stroke="#38bdf8"
+              stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="0 264" />
+    </svg>
+    <div class="val"><b id="rpmVal">0</b><span>RPM</span></div>
+  </div>
+
+  <div class="gauge">
+    <svg viewBox="0 0 100 100">
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#1b2533" stroke-width="8"/>
+      <circle id="spdArc" cx="50" cy="50" r="42" fill="none" stroke="#22c55e"
+              stroke-width="8" stroke-linecap="round" stroke-dasharray="0 264"/>
+    </svg>
+    <div class="val"><b id="spdVal">0</b><span>КМ/Ч</span></div>
+  </div>
+
+  <div class="gearbox">
+    <div class="label">КПП</div>
+    <div class="gears" id="gears">
+      <button data-g="1">1</button>
+      <button data-g="2">2</button>
+      <button data-g="3">3</button>
+      <button data-g="4">4</button>
+      <button data-g="5">5</button>
+      <button data-g="-1" class="rev">R</button>
+      <button data-g="0" class="on" style="grid-column: span 3; width:auto;">N — нейтраль</button>
+    </div>
+  </div>
+</div>
+
+<div class="engine-view" id="engineView">
+  <div class="crank"></div>
+  <div class="exhaust"></div>
+</div>
+
+<div class="pedals">
+  <div class="pedal brake" data-p="brake">
+    <div class="fill"></div>
+    <div class="ridges"><i></i><i></i><i></i><i></i><i></i></div>
+    <span>ТОРМОЗ</span>
+  </div>
+  <div class="pedal gas" data-p="gas">
+    <div class="fill"></div>
+    <div class="ridges"><i></i><i></i><i></i><i></i><i></i></div>
+    <span>ГАЗ</span>
+  </div>
+</div>
+
+<div class="hint">
+  <kbd>W</kbd>/<kbd>↑</kbd> — газ · <kbd>S</kbd>/<kbd>↓</kbd> — тормоз · <kbd>1</kbd>…<kbd>5</kbd> — передачи · <kbd>0</kbd>/<kbd>N</kbd> — нейтраль · <kbd>R</kbd> — задняя<br>
+  Управление сцеплением автоматическое: чем ниже передача, тем сильнее двигатель тормозит и резче разгон.
+</div>
+
+<script>
+(() => {
+  // ---- Состояние ----
+  const S = {
+    rpm: 800,          // обороты двигателя
+    idleRpm: 800,
+    maxRpm: 7000,
+    redline: 6000,
+    speed: 0,          // км/ч
+    gear: 0,           // 0 = нейтраль, -1 = задняя, 1..5
+    gas: 0, brake: 0,  // 0..1
+    angle: 0           // фаза вращения коленвала (для анимации)
+  };
+
+  // передаточные числа: скорость(км/ч) = rpm / ratio
+  const RATIOS = { '-1': 55, '1': 34, '2': 22, '3': 16, '4': 12.5, '5': 10 };
+  const WHEEL_CIRC = 1.9; // м, для пересчёта к об/мин колеса
+
+  // ---- DOM ----
+  const el = {
+    rpmVal: document.getElementById('rpmVal'),
+    rpmArc: document.getElementById('rpmArc'),
+    spdVal: document.getElementById('spdVal'),
+    spdArc: document.getElementById('spdArc'),
+    gears:  document.getElementById('gears'),
+    view:   document.getElementById('engineView')
+  };
+
+  // ---- Сборка поршневой группы ----
+  const CYL = 4;
+  const cyls = [];
+  const viewW = 560;
+  for (let i = 0; i < CYL; i++) {
+    const c = document.createElement('div');
+    c.className = 'cyl';
+    c.style.left = (40 + i * 125) + 'px';
+
+    const p = document.createElement('div');
+    p.className = 'piston';
+
+    const r = document.createElement('div');
+    r.className = 'rod';
+
+    const sp = document.createElement('div');
+    sp.className = 'spark';
+
+    c.appendChild(p); c.appendChild(r); c.appendChild(sp);
+    el.view.appendChild(c);
+    cyls.push({ cyl: c, piston: p, rod: r, spark: sp, phase: i * Math.PI });
+  }
+
+  // ---- Педали ----
+  const pedalEls = {};
+  document.querySelectorAll('.pedal').forEach(p => {
+    const type = p.dataset.p;
+    const fill = p.querySelector('.fill');
+    pedalEls[type] = { el: p, fill };
+
+    const set = v => {
+      S[type] = Math.max(0, Math.min(1, v));
+      fill.style.height = (S[type] * 100) + '%';
+    };
+    p.addEventListener('pointerdown', e => {
+      p.setPointerCapture(e.pointerId);
+      p._set = set; p._startY = e.clientY; set(1);
+    });
+    p.addEventListener('pointermove', e => {
+      if (!p._set) return;
+      const dy = e.clientY - p._startY;
+      set(1 + dy / 120);
+    });
+    p.addEventListener('pointerup', () => { p._set = null; set(0); });
+    p.addEventListener('pointercancel', () => { p._set = null; set(0); });
+  });
+
+  // ---- КПП ----
+  function setGear(g) {
+    S.gear = g;
+    el.gears.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('on', Number(b.dataset.g) === g);
+    });
+  }
+  el.gears.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) setGear(Number(b.dataset.g));
+  });
+
+  // ---- Клавиатура ----
+  const keys = {};
+  addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    keys[k] = true;
+    if ('12345'.includes(k)) setGear(Number(k));
+    if (k === '0' || k === 'n') setGear(0);
+    if (k === 'r') setGear(-1);
+    if (['w','s','arrowup','arrowdown',' '].includes(k)) e.preventDefault();
+  });
+  addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+  function readKeys() {
+    const g = (keys['w'] || keys['arrowup']) ? 1 : 0;
+    const b = (keys['s'] || keys['arrowdown'] || keys[' ']) ? 1 : 0;
+    if (g) { S.gas = 1; pedalEls.gas.fill.style.height = '100%'; }
+    else if (!pedalEls.gas.el._set) { S.gas = 0; pedalEls.gas.fill.style.height = '0%'; }
+    if (b) { S.brake = 1; pedalEls.brake.fill.style.height = '100%'; }
+    else if (!pedalEls.brake.el._set) { S.brake = 0; pedalEls.brake.fill.style.height = '0%'; }
+  }
+
+  // ---- Физика ----
+  const MAX_SPEED = 220;
+  let last = performance.now();
+
+  function physics(dt) {
+    readKeys();
+
+    const ratio = S.gear === 0 ? null : RATIOS[String(S.gear)];
+    const inGear = ratio !== null;
+
+    // --- Двигатель ---
+    // Целевые обороты: холостые + газ, ограниченные связью с колёсами
+    let target;
+    if (inGear) {
+      // обороты, навязанные скоростью (жёсткая связь через трансмиссию)
+      const driven = Math.abs(S.speed) * ratio;
+      target = driven + S.gas * 1800;
+      // при низких оборотах и малом газе двигатель стремится заглохнуть
+      if (driven < 500) target = Math.max(300, driven + S.gas * 2500);
+      if (target < S.idleRpm && S.gas < 0.05) target = Math.max(400, driven);
+    } else {
+      target = S.idleRpm + S.gas * (S.maxRpm - S.idleRpm);
+    }
+
+    // ограничение по максимальным оборотам
+    target = Math.min(target, S.maxRpm);
+
+    // инерция двигателя
+    const resp = inGear ? 7 : 4.5;
+    S.rpm += (target - S.rpm) * Math.min(1, dt * resp);
+
+    // --- Скорость ---
+    if (inGear) {
+      // обороты -> скорость
+      const wheelRpm = S.rpm / ratio;
+      const v = wheelRpm * WHEEL_CIRC * 60 / 1000; // км/ч
+      S.speed += (v - S.speed) * Math.min(1, dt * 3.5);
+      // сопротивление качению и воздуху
+      S.speed -= S.speed * 0.35 * dt;
+    } else {
+      // нейтраль: накат
+      S.speed -= S.speed * 0.45 * dt;
+    }
+
+    // тормоз
+    S.speed -= S.speed * S.brake * 3.5 * dt;
+    if (Math.abs(S.speed) < 0.4 && S.brake > 0) S.speed = 0;
+
+    S.speed = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, S.speed));
+
+    // защита от заглохания на нейтрали/малом ходу
+    if (S.rpm < 350) S.rpm = S.idleRpm;
+  }
+
+  // ---- Отрисовка ----
+  function updateUI(dt) {
+    // Тахометр: 0..8000 -> 0..264 (длина дуги r=42 => 2πr=264)
+    const rpmFrac = Math.min(1, S.rpm / 8000);
+    el.rpmArc.setAttribute('stroke-dasharray', `${rpmFrac * 264} 264`);
+    el.rpmArc.setAttribute('stroke', S.rpm >= S.redline ? '#ef4444' : '#38bdf8');
+    el.rpmVal.textContent = Math.round(S.rpm);
+    el.rpmVal.classList.toggle('redline', S.rpm >= S.redline);
+
+    // Спидометр: 0..220
+    const spdFrac = Math.min(1, Math.abs(S.speed) / MAX_SPEED);
+    el.spdArc.setAttribute('stroke-dasharray', `${spdFrac * 264} 264`);
+    el.spdVal.textContent = Math.round(Math.abs(S.speed));
+  }
+
+  function animate(dt) {
+    // Вращение коленвала: 1 оборот = 2 оборота коленвала (4-тактный)
+    // визуально: 1 цикл на 2 оборота
+    S.angle += S.rpm / 60 * dt * 2 * Math.PI;
+
+    cyls.forEach((c, i) => {
+      // фаза цилиндра: 4 такта -> смещение на 180° между цилиндрами
+      const phase = S.angle * 0.5 + c.phase;
+      // ход поршня: cos, 0..1
+      const stroke = (Math.cos(phase) + 1) / 2;
+      const maxTravel = 70;
+      c.piston.style.transform = `translateY(${-stroke * maxTravel}px)`;
+
+      // шатун слегка поворачивается
+      const rodAngle = Math.sin(phase) * 12;
+      c.rod.style.transform = `rotate(${rodAngle}deg)`;
+
+      // искра в момент ВМТ (stroke ~ 1) каждые 2 оборота коленвала
+      const sparkPhase = ((S.angle / (4 * Math.PI) + i / 4) % 1);
+      const firing = sparkPhase < 0.06 ? 1 - sparkPhase / 0.06 : 0;
+      c.spark.style.opacity = firing * (S.rpm > 500 ? 1 : 0);
+    });
+  }
+
+  // ---- Цикл ----
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+
+    physics(dt);
+    updateUI(dt);
+    animate(dt);
+
+    requestAnimationFrame(loop);
+  }
+
+  setGear(0);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
